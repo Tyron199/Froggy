@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { Lilypad } from '../entities/Lilypad.ts';
 import { lerp } from '../utils/math.ts';
 import {
   JUMP_BASE_HEIGHT,
@@ -8,6 +7,13 @@ import {
   MAX_JUMP_TIME,
   MIN_JUMP_TIME,
 } from '../game/constants.ts';
+
+/** Anything the frog can jump onto — a Lilypad or a Log. */
+export interface Landable {
+  id: number;
+  position: THREE.Vector3;
+  radius: number;
+}
 
 export interface JumpParams {
   start: THREE.Vector3;
@@ -37,17 +43,17 @@ export function positionAtT(jump: JumpParams, t: number, out = new THREE.Vector3
   return out;
 }
 
-/** Finds the lilypad (if any) whose landing radius contains the given XZ point. */
-export function findLandingLilypad(point: THREE.Vector3, lilypads: Lilypad[]): Lilypad | null {
-  let closest: Lilypad | null = null;
+/** Finds the landable (if any) whose landing radius contains the given XZ point. */
+export function findLandingTarget<T extends Landable>(point: THREE.Vector3, landables: T[]): T | null {
+  let closest: T | null = null;
   let closestDist = Infinity;
 
-  for (const pad of lilypads) {
-    const dx = pad.position.x - point.x;
-    const dz = pad.position.z - point.z;
+  for (const landable of landables) {
+    const dx = landable.position.x - point.x;
+    const dz = landable.position.z - point.z;
     const dist = Math.hypot(dx, dz);
-    if (dist <= pad.radius * LILYPAD_LANDING_LENIENCY && dist < closestDist) {
-      closest = pad;
+    if (dist <= landable.radius * LILYPAD_LANDING_LENIENCY && dist < closestDist) {
+      closest = landable;
       closestDist = dist;
     }
   }

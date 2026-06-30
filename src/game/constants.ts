@@ -66,9 +66,37 @@ export const LEG_LANDING_EXTEND_FRACTION = 0.75;
 export const LEG_LANDING_SETTLE_DURATION = 0.18;
 
 // Tongue catch mechanic.
+/** How long the frog takes to turn and face the fly before the tongue lashes out. */
+export const TONGUE_TURN_DURATION = 0.12;
 export const TONGUE_LASH_DURATION = 0.22;
 /** Fraction of the lash spent extending outward; the rest is the retract. */
 export const TONGUE_LASH_OUT_FRACTION = 0.35;
 /** How far (0..1) toward an out-of-range fly the tongue reaches before falling short. */
 export const TONGUE_FALL_SHORT_FRACTION = 0.6;
 export const TONGUE_WIDTH = 0.07;
+
+// Log obstacles: unstable stepping stones that tip the frog into the water if it lingers.
+export const LOG_RADIUS = 0.85;
+export const LOG_LENGTH = 2.2;
+export const LOG_BODY_RADIUS = 0.32;
+/** Fraction of ring placement slots that become a log instead of a lilypad. */
+export const LOG_SPAWN_CHANCE = 0.18;
+/** How long the frog can stand on a log before it tips. */
+export const LOG_STABLE_DURATION = 3;
+/** Ambient roll speed (rad/s) when unoccupied. */
+export const LOG_ROLL_SPEED_IDLE = 0.15;
+/** Roll speed (rad/s) at maximum danger, just before tipping. */
+export const LOG_ROLL_SPEED_MAX = 5.5;
+export const LOG_TIP_DIP_DEPTH = 0.35;
+export const LOG_TIP_RECOVER_DURATION = 0.8;
+
+// Water ripple VFX.
+export const RIPPLE_POOL_SIZE = 10;
+export const RIPPLE_DURATION = 0.9;
+export const RIPPLE_MAX_SCALE = 2.4;
+export const RIPPLE_START_OPACITY = 0.55;
+export const RIPPLE_AMBIENT_OPACITY = 0.22;
+export const RIPPLE_AMBIENT_INTERVAL_MIN = 2.5;
+export const RIPPLE_AMBIENT_INTERVAL_MAX = 4.5;
+/** How far from the frog ambient ripples may appear. */
+export const RIPPLE_AMBIENT_RADIUS = 7;

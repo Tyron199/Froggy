@@ -40,5 +40,6 @@ export class Lilypad {
     this.mesh.add(notch);
 
     this.mesh.position.copy(this.position);
+    this.mesh.rotation.y = Math.random() * Math.PI * 2;
   }
 }

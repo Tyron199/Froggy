@@ -24,10 +24,16 @@ import {
   TONGUE_FALL_SHORT_FRACTION,
   TONGUE_LASH_DURATION,
   TONGUE_LASH_OUT_FRACTION,
+  TONGUE_TURN_DURATION,
   TONGUE_WIDTH,
 } from '../game/constants.ts';
 import { buildJump, positionAtT, type JumpParams } from '../physics/jumpTrajectory.ts';
 import { lerp } from '../utils/math.ts';
+
+/** Shortest signed angular distance from `a` to `b`, both in radians. */
+function shortestAngleDelta(a: number, b: number): number {
+  return Math.atan2(Math.sin(b - a), Math.cos(b - a));
+}
 
 const SINK_DURATION = 0.6;
 const MOUTH_LOCAL_POSITION = new THREE.Vector3(0, 0.24, 0.34);
@@ -88,7 +94,6 @@ function legPoseForJumpT(t: number, launchPower: number): LegPose {
 export class Frog {
   readonly group: THREE.Group;
   state: FrogState = FrogState.Idle;
-  currentLilypad: Lilypad | null = null;
 
   private jump: JumpParams | null = null;
   private elapsed = 0;
@@ -108,13 +113,17 @@ export class Frog {
 
   private readonly tonguePivot: THREE.Group;
   private readonly tongueMesh: THREE.Mesh;
+  private tonguePhase: 'turning' | 'lashing' = 'lashing';
+  private turnStartYaw = 0;
+  private turnTargetYaw = 0;
+  private tongueTurnElapsed = 0;
+  private readonly pendingTongueTarget = new THREE.Vector3();
   private tongueElapsed = 0;
   private tongueMaxLength = 0;
   private tongueFired = false;
   private tongueOnComplete: (() => void) | null = null;
 
   constructor(startLilypad: Lilypad) {
-    this.currentLilypad = startLilypad;
     this.group = new THREE.Group();
 
     const bodyGeometry = new THREE.SphereGeometry(0.32, 16, 12);
@@ -209,20 +218,48 @@ export class Frog {
     this.aimPower = power ?? 0;
   }
 
+  /** Faces the frog toward `target` immediately, tracking the player's pull direction while aiming. */
+  setAimPoint(target: THREE.Vector3): void {
+    if (this.state !== FrogState.Idle) return;
+    const dx = target.x - this.group.position.x;
+    const dz = target.z - this.group.position.z;
+    if (dx * dx + dz * dz > 1e-6) {
+      this.group.rotation.y = Math.atan2(dx, dz);
+    }
+  }
+
   /**
-   * Lashes the tongue toward `targetWorldPoint`. If `reaches` is false, the tongue falls short
-   * (stops partway there) instead of reaching it. `onComplete` fires the instant the tongue tip
-   * arrives at its final point (reach or fall-short) — that's when a catch/miss should register.
+   * Turns to face `targetWorldPoint` and then lashes the tongue toward it. If `reaches` is false,
+   * the tongue falls short (stops partway there) instead of reaching it. `onComplete` fires the
+   * instant the tongue tip arrives at its final point (reach or fall-short) — that's when a
+   * catch/miss should register.
    */
   lashTongue(targetWorldPoint: THREE.Vector3, reaches: boolean, onComplete: () => void): void {
-    this.group.updateMatrixWorld(true);
     const mouthWorld = this.tonguePivot.getWorldPosition(new THREE.Vector3());
-
     const finalTargetWorld = reaches
       ? targetWorldPoint.clone()
       : mouthWorld.clone().lerp(targetWorldPoint, TONGUE_FALL_SHORT_FRACTION);
 
-    const localTarget = this.group.worldToLocal(finalTargetWorld.clone());
+    const dx = finalTargetWorld.x - this.group.position.x;
+    const dz = finalTargetWorld.z - this.group.position.z;
+
+    this.turnStartYaw = this.group.rotation.y;
+    this.turnTargetYaw =
+      dx * dx + dz * dz > 1e-6
+        ? this.turnStartYaw + shortestAngleDelta(this.turnStartYaw, Math.atan2(dx, dz))
+        : this.turnStartYaw;
+    this.tongueTurnElapsed = 0;
+    this.tonguePhase = 'turning';
+    this.pendingTongueTarget.copy(finalTargetWorld);
+    this.tongueOnComplete = onComplete;
+    this.tongueFired = false;
+    this.state = FrogState.Tonguing;
+  }
+
+  /** Aims the tongue pivot at `pendingTongueTarget` and starts the lash-out/retract animation. */
+  private beginLash(): void {
+    this.group.updateMatrixWorld(true);
+    const localTarget = this.group.worldToLocal(this.pendingTongueTarget.clone());
     const dir = localTarget.clone().sub(MOUTH_LOCAL_POSITION);
     const horizontalDist = Math.hypot(dir.x, dir.z);
 
@@ -231,10 +268,7 @@ export class Frog {
 
     this.tongueMaxLength = Math.max(0.05, dir.length());
     this.tongueElapsed = 0;
-    this.tongueFired = false;
-    this.tongueOnComplete = onComplete;
     this.tongueMesh.visible = true;
-    this.state = FrogState.Tonguing;
   }
 
   /** Starts a parabolic jump toward `target`, using `power` (0..1) to set arc duration/height. */
@@ -248,7 +282,6 @@ export class Frog {
     this.elapsed = 0;
     this.launchPower = power;
     this.state = FrogState.Jumping;
-    this.currentLilypad = null;
 
     const dir = new THREE.Vector3().subVectors(end, start);
     if (dir.lengthSq() > 1e-6) {
@@ -265,6 +298,18 @@ export class Frog {
       const scale = 1 - sinkT;
       this.group.scale.set(scale, scale, scale);
       this.applyLegPose(lerpPose(LEG_POSE_LANDING, LEG_POSE_LIMP, sinkT));
+      return false;
+    }
+
+    if (this.state === FrogState.Tonguing && this.tonguePhase === 'turning') {
+      this.tongueTurnElapsed += dt;
+      const t = Math.min(1, this.tongueTurnElapsed / TONGUE_TURN_DURATION);
+      this.group.rotation.y = lerp(this.turnStartYaw, this.turnTargetYaw, easeOutQuad(t));
+
+      if (t >= 1) {
+        this.tonguePhase = 'lashing';
+        this.beginLash();
+      }
       return false;
     }
 
@@ -292,6 +337,7 @@ export class Frog {
 
       if (t >= 1) {
         this.tongueMesh.visible = false;
+        this.tonguePhase = 'lashing';
         this.state = FrogState.Idle;
       }
       return false;
@@ -328,18 +374,16 @@ export class Frog {
     return false;
   }
 
-  /** Lands at the real jump-landing point, clamped to stay visibly inside the pad's disc. */
-  landOnLilypad(pad: Lilypad): void {
-    this.currentLilypad = pad;
-
-    const dx = this.lastJumpTarget.x - pad.position.x;
-    const dz = this.lastJumpTarget.z - pad.position.z;
+  /** Lands at the real jump-landing point, clamped to stay visibly inside the surface's disc. */
+  landOnSurface(surface: { position: THREE.Vector3; radius: number }): void {
+    const dx = this.lastJumpTarget.x - surface.position.x;
+    const dz = this.lastJumpTarget.z - surface.position.z;
     const dist = Math.hypot(dx, dz);
-    const clampRadius = pad.radius * LANDING_VISUAL_INSET;
+    const clampRadius = surface.radius * LANDING_VISUAL_INSET;
 
     if (dist > clampRadius && dist > 1e-6) {
       const scale = clampRadius / dist;
-      this.group.position.set(pad.position.x + dx * scale, FROG_REST_Y, pad.position.z + dz * scale);
+      this.group.position.set(surface.position.x + dx * scale, FROG_REST_Y, surface.position.z + dz * scale);
     } else {
       this.group.position.set(this.lastJumpTarget.x, FROG_REST_Y, this.lastJumpTarget.z);
     }
@@ -354,7 +398,6 @@ export class Frog {
   }
 
   respawnOnLilypad(pad: Lilypad): void {
-    this.currentLilypad = pad;
     this.group.position.copy(pad.position);
     this.group.position.y = FROG_REST_Y;
     this.group.scale.set(1, 1, 1);
