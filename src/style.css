@@ -111,3 +111,41 @@ body {
   color: #fff;
   min-height: 44px;
 }
+
+.settings-gear {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(5, 20, 30, 0.55);
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.settings-panel {
+  position: absolute;
+  right: 16px;
+  bottom: 68px;
+  pointer-events: auto;
+  background: rgba(5, 20, 30, 0.72);
+  color: #fff;
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+
+.settings-panel.hidden {
+  display: none;
+}
+
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+}

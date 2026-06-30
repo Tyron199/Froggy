@@ -4,11 +4,13 @@ import { WaterPlane } from '../entities/WaterPlane.ts';
 import { Lilypad } from '../entities/Lilypad.ts';
 import { Frog, FrogState } from '../entities/Frog.ts';
 import { GameStatus, GameStore } from './GameState.ts';
+import { SettingsStore } from './SettingsState.ts';
 import { findLandingLilypad } from '../physics/jumpTrajectory.ts';
 import { PullReleaseController, type AimResult } from '../input/PullReleaseController.ts';
 import { TrajectoryPreview } from '../input/TrajectoryPreview.ts';
 import { HUD } from '../ui/HUD.ts';
 import { GameOverScreen } from '../ui/GameOverScreen.ts';
+import { SettingsPanel } from '../ui/SettingsPanel.ts';
 import { FlySpawner } from '../level/FlySpawner.ts';
 import { LevelGenerator } from '../level/LevelGenerator.ts';
 import { Fly } from '../entities/Fly.ts';
@@ -27,6 +29,7 @@ export class Game {
   private readonly sun = new THREE.DirectionalLight(0xfff4d6, 1.1);
 
   readonly store = new GameStore();
+  readonly settingsStore = new SettingsStore();
   readonly frog: Frog;
 
   get lilypads(): Lilypad[] {
@@ -73,6 +76,7 @@ export class Game {
 
     new HUD(uiRoot, this.store);
     this.gameOverScreen = new GameOverScreen(uiRoot, () => this.restart());
+    new SettingsPanel(uiRoot, this.settingsStore);
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -82,9 +86,17 @@ export class Game {
       canAim: () => this.frog.state === FrogState.Idle && this.store.status === GameStatus.Playing,
       getFrogPosition: () => this.frog.group.position,
       getCamera: () => this.cameraRig.camera,
-      onAimStart: () => this.trajectoryPreview.show(),
-      onAimUpdate: (aim) => this.updateAimPreview(aim),
-      onAimCancel: () => this.trajectoryPreview.hide(),
+      onAimStart: () => {
+        if (this.settingsStore.aimAssist) this.trajectoryPreview.show();
+      },
+      onAimUpdate: (aim) => {
+        this.frog.setAimPower(aim.power);
+        if (this.settingsStore.aimAssist) this.updateAimPreview(aim);
+      },
+      onAimCancel: () => {
+        this.frog.setAimPower(null);
+        this.trajectoryPreview.hide();
+      },
       onRelease: (aim) => this.releaseJump(aim),
       onTap: (x, y) => this.handleTap(x, y),
     });
@@ -124,6 +136,7 @@ export class Game {
 
   private handleTap(screenX: number, screenY: number): void {
     if (this.store.status !== GameStatus.Playing) return;
+    if (this.frog.state !== FrogState.Idle) return;
 
     const rect = this.canvas.getBoundingClientRect();
     const ndc = new THREE.Vector2(
@@ -140,13 +153,18 @@ export class Game {
     if (performance.now() < fly.noRetapUntil) return;
 
     const distance = this.frog.group.position.distanceTo(fly.position);
-    if (distance <= TONGUE_RANGE) {
-      this.flySpawner.remove(fly);
-      this.store.addScore(1);
-      this.flySpawner.topUp();
-    } else {
-      fly.flee(this.pickFleeTarget(fly));
-    }
+    const reaches = distance <= TONGUE_RANGE;
+
+    this.frog.lashTongue(fly.position.clone(), reaches, () => {
+      if (!this.flySpawner.flies.includes(fly)) return;
+      if (reaches) {
+        this.flySpawner.remove(fly);
+        this.store.addScore(1);
+        this.flySpawner.topUp();
+      } else {
+        fly.flee(this.pickFleeTarget(fly));
+      }
+    });
   }
 
   private pickFleeTarget(fly: Fly): Lilypad {
