@@ -130,3 +130,31 @@ export const SHAKE_MAGNITUDE = 0.22;
 export const CATCH_BURST_COUNT = 10;
 export const CATCH_BURST_DURATION = 0.5;
 export const CATCH_BURST_SPEED = 2.2;
+
+// Water surface animation (CPU vertex displacement, normals recomputed per frame).
+export const WATER_SIZE = 150;
+export const WATER_SEGMENTS = 50;
+export const WATER_WAVE_AMPLITUDE = 0.09;
+export const WATER_WAVE_FREQUENCY = 0.35;
+export const WATER_WAVE_SPEED = 0.6;
+export const WATER_WAVE_SECONDARY_AMPLITUDE = 0.045;
+export const WATER_WAVE_SECONDARY_FREQUENCY = 0.9;
+export const WATER_WAVE_SECONDARY_SPEED = 1.3;
+/** Vertex colors lerp toward these at wave crests/troughs so motion reads clearly at any light angle. */
+export const WATER_COLOR_BASE = 0x1e6f8c;
+export const WATER_COLOR_CREST = 0x8fdcf0;
+export const WATER_COLOR_TROUGH = 0x123247;
+
+// Ambient fish: purely cosmetic, mostly-submerged wanderers that break the surface with a fin.
+export const FISH_COUNT = 5;
+export const FISH_COLOR = 0x355c45;
+export const FISH_LENGTH = 0.6;
+/** How far below the water surface the fish body is centered. */
+export const FISH_DEPTH = 0.12;
+export const FISH_FIN_HEIGHT = 0.22;
+export const FISH_WANDER_RADIUS = 2.2;
+export const FISH_WANDER_SPEED = 0.18;
+/** Max radius around a fish's home point used when picking a fresh one. */
+export const FISH_HOME_RANGE = 8;
+/** Once a fish drifts this far from the frog, its home point is relocated nearby. */
+export const FISH_RECENTER_DISTANCE = 11;

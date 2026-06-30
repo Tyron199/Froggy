@@ -18,6 +18,7 @@ import { LevelGenerator } from '../level/LevelGenerator.ts';
 import { Fly } from '../entities/Fly.ts';
 import { RippleEffect } from '../entities/RippleEffect.ts';
 import { CatchBurst } from '../entities/CatchBurst.ts';
+import { FishSchool } from '../entities/FishSchool.ts';
 import { ScorePopup } from '../ui/ScorePopup.ts';
 import { SfxEngine } from '../audio/SfxEngine.ts';
 import {
@@ -83,6 +84,7 @@ export class Game {
   private readonly scorePopup: ScorePopup;
   private readonly levelGenerator: LevelGenerator;
   private readonly flySpawner: FlySpawner;
+  private readonly fishSchool: FishSchool;
   private readonly raycaster = new THREE.Raycaster();
   private pendingLandingTarget: Landable | null = null;
   private lastSafeLilypad: Lilypad;
@@ -105,6 +107,9 @@ export class Game {
     this.levelGenerator = new LevelGenerator(this.scene);
     const startPad = this.levelGenerator.seed();
     this.lastSafeLilypad = startPad;
+
+    this.fishSchool = new FishSchool(startPad.position);
+    this.scene.add(this.fishSchool.group);
 
     this.frog = new Frog(startPad);
     this.scene.add(this.frog.group);
@@ -350,6 +355,8 @@ export class Game {
     this.updateDistance(frogPos);
 
     this.water.recenter(frogPos.x, frogPos.z);
+    this.water.update(this.clock.elapsedTime);
+    this.fishSchool.update(frogPos, this.clock.elapsedTime);
     this.sun.position.set(frogPos.x + 6, 10, frogPos.z + 4);
     this.sun.target.position.set(frogPos.x, 0, frogPos.z);
 
