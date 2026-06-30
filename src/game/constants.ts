@@ -100,3 +100,12 @@ export const RIPPLE_AMBIENT_INTERVAL_MIN = 2.5;
 export const RIPPLE_AMBIENT_INTERVAL_MAX = 4.5;
 /** How far from the frog ambient ripples may appear. */
 export const RIPPLE_AMBIENT_RADIUS = 7;
+
+// Combo/streak scoring.
+/** Time after a catch before the streak resets. */
+export const COMBO_WINDOW_SECONDS = 4.5;
+export const COMBO_MAX_MULTIPLIER = 5;
+
+// Distance milestones.
+export const DISTANCE_MILESTONE_STEP = 50;
+export const DISTANCE_MILESTONE_BONUS = 5;

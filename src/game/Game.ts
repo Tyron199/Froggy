@@ -12,11 +12,14 @@ import { TrajectoryPreview } from '../input/TrajectoryPreview.ts';
 import { HUD } from '../ui/HUD.ts';
 import { GameOverScreen } from '../ui/GameOverScreen.ts';
 import { SettingsPanel } from '../ui/SettingsPanel.ts';
+import { MilestoneBanner } from '../ui/MilestoneBanner.ts';
 import { FlySpawner } from '../level/FlySpawner.ts';
 import { LevelGenerator } from '../level/LevelGenerator.ts';
 import { Fly } from '../entities/Fly.ts';
 import { RippleEffect } from '../entities/RippleEffect.ts';
 import {
+  DISTANCE_MILESTONE_BONUS,
+  DISTANCE_MILESTONE_STEP,
   RIPPLE_AMBIENT_INTERVAL_MAX,
   RIPPLE_AMBIENT_INTERVAL_MIN,
   RIPPLE_AMBIENT_OPACITY,
@@ -67,13 +70,16 @@ export class Game {
   }
 
   private readonly canvas: HTMLCanvasElement;
+  private readonly hud: HUD;
   private readonly gameOverScreen: GameOverScreen;
+  private readonly milestoneBanner: MilestoneBanner;
   private readonly levelGenerator: LevelGenerator;
   private readonly flySpawner: FlySpawner;
   private readonly raycaster = new THREE.Raycaster();
   private pendingLandingTarget: Landable | null = null;
   private lastSafeLilypad: Lilypad;
   private currentLog: Log | null = null;
+  private nextMilestone = DISTANCE_MILESTONE_STEP;
 
   constructor(canvas: HTMLCanvasElement, uiRoot: HTMLElement) {
     this.canvas = canvas;
@@ -98,8 +104,9 @@ export class Game {
     this.flySpawner = new FlySpawner(this.scene, this.lilypads, startPad);
     this.flySpawner.spawnInitial();
 
-    new HUD(uiRoot, this.store);
+    this.hud = new HUD(uiRoot, this.store);
     this.gameOverScreen = new GameOverScreen(uiRoot, () => this.restart());
+    this.milestoneBanner = new MilestoneBanner(uiRoot);
     new SettingsPanel(uiRoot, this.settingsStore);
 
     this.resize();
@@ -189,7 +196,7 @@ export class Game {
       if (!this.flySpawner.flies.includes(fly)) return;
       if (reaches) {
         this.flySpawner.remove(fly);
-        this.store.addScore(1);
+        this.store.registerCatch();
         this.flySpawner.topUp();
       } else {
         fly.flee(this.pickFleeTarget(fly));
@@ -246,6 +253,7 @@ export class Game {
   private restart(): void {
     this.gameOverScreen.hide();
     this.store.reset();
+    this.nextMilestone = DISTANCE_MILESTONE_STEP;
 
     const startPad = this.levelGenerator.seed();
     this.lastSafeLilypad = startPad;
@@ -291,12 +299,29 @@ export class Game {
     this.updateAmbientRipples(dt);
     this.ripples.update(dt);
 
+    this.store.tickCombo(dt);
+    this.hud.setComboTimeRemaining(this.store.comboTimeRemaining);
+
     const frogPos = this.frog.group.position;
+    this.updateDistance(frogPos);
+
     this.water.recenter(frogPos.x, frogPos.z);
     this.sun.position.set(frogPos.x + 6, 10, frogPos.z + 4);
     this.sun.target.position.set(frogPos.x, 0, frogPos.z);
 
     this.renderer.render(this.scene, this.cameraRig.camera);
+  }
+
+  private updateDistance(frogPos: THREE.Vector3): void {
+    const distance = Math.hypot(frogPos.x, frogPos.z);
+    this.hud.setDistance(distance);
+
+    if (distance >= this.nextMilestone) {
+      this.nextMilestone += DISTANCE_MILESTONE_STEP;
+      this.store.addScore(DISTANCE_MILESTONE_BONUS);
+      this.store.updateDistance(distance);
+      this.milestoneBanner.show(`${Math.round(distance)}m!`);
+    }
   }
 
   private updateAmbientRipples(dt: number): void {
