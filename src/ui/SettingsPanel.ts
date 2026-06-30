@@ -2,7 +2,8 @@ import { SettingsStore } from '../game/SettingsState.ts';
 
 export class SettingsPanel {
   private readonly panel: HTMLDivElement;
-  private readonly checkbox: HTMLInputElement;
+  private readonly aimAssistCheckbox: HTMLInputElement;
+  private readonly soundCheckbox: HTMLInputElement;
 
   constructor(root: HTMLElement, store: SettingsStore) {
     const gearButton = document.createElement('button');
@@ -14,20 +15,10 @@ export class SettingsPanel {
     this.panel = document.createElement('div');
     this.panel.className = 'settings-panel hidden';
 
-    const label = document.createElement('label');
-    label.className = 'settings-toggle';
-
-    this.checkbox = document.createElement('input');
-    this.checkbox.type = 'checkbox';
-    this.checkbox.checked = store.aimAssist;
-    this.checkbox.addEventListener('change', () => store.setAimAssist(this.checkbox.checked));
-
-    const labelText = document.createElement('span');
-    labelText.textContent = 'Aim Assist';
-
-    label.appendChild(this.checkbox);
-    label.appendChild(labelText);
-    this.panel.appendChild(label);
+    this.aimAssistCheckbox = this.createToggleRow('Aim Assist', store.aimAssist, (checked) =>
+      store.setAimAssist(checked),
+    );
+    this.soundCheckbox = this.createToggleRow('Sound', store.sound, (checked) => store.setSound(checked));
 
     gearButton.addEventListener('pointerup', (event) => {
       event.preventDefault();
@@ -39,7 +30,27 @@ export class SettingsPanel {
     root.appendChild(this.panel);
 
     store.subscribe(() => {
-      this.checkbox.checked = store.aimAssist;
+      this.aimAssistCheckbox.checked = store.aimAssist;
+      this.soundCheckbox.checked = store.sound;
     });
+  }
+
+  private createToggleRow(labelText: string, initial: boolean, onChange: (checked: boolean) => void): HTMLInputElement {
+    const label = document.createElement('label');
+    label.className = 'settings-toggle';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = initial;
+    checkbox.addEventListener('change', () => onChange(checkbox.checked));
+
+    const text = document.createElement('span');
+    text.textContent = labelText;
+
+    label.appendChild(checkbox);
+    label.appendChild(text);
+    this.panel.appendChild(label);
+
+    return checkbox;
   }
 }

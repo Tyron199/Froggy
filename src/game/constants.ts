@@ -109,3 +109,24 @@ export const COMBO_MAX_MULTIPLIER = 5;
 // Distance milestones.
 export const DISTANCE_MILESTONE_STEP = 50;
 export const DISTANCE_MILESTONE_BONUS = 5;
+
+// Pad/log spawn-in animation (anticipation ripple, then a pop with overshoot).
+/** How long after a pad/log is placed before its ripple cue fires, scaled per index within a batch. */
+export const POP_STAGGER_STEP = 0.06;
+/** Random jitter added on top of the stagger so a batch doesn't feel metronomic. */
+export const POP_STAGGER_JITTER = 0.05;
+/** Time between the anticipation ripple and the pad/log actually starting to rise. */
+export const POP_RIPPLE_LEAD = 0.18;
+export const POP_DURATION = 0.45;
+/** Random variance applied to each pop's duration so they don't all move in lockstep. */
+export const POP_DURATION_JITTER = 0.15;
+export const POP_SUBMERGE_DEPTH = 0.4;
+
+// Camera shake (failure only).
+export const SHAKE_DURATION = 0.35;
+export const SHAKE_MAGNITUDE = 0.22;
+
+// Fly-catch feedback (particle burst + score popup).
+export const CATCH_BURST_COUNT = 10;
+export const CATCH_BURST_DURATION = 0.5;
+export const CATCH_BURST_SPEED = 2.2;

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CAMERA_OFFSET, CAMERA_DAMPING_LAMBDA } from '../game/constants.ts';
+import { CAMERA_OFFSET, CAMERA_DAMPING_LAMBDA, SHAKE_DURATION, SHAKE_MAGNITUDE } from '../game/constants.ts';
 import { damp } from '../utils/math.ts';
 
 const offset = new THREE.Vector3(CAMERA_OFFSET.x, CAMERA_OFFSET.y, CAMERA_OFFSET.z);
@@ -9,12 +9,18 @@ export class CameraRig {
   private readonly desiredPosition = new THREE.Vector3();
   private readonly desiredLookAt = new THREE.Vector3();
   private readonly currentLookAt = new THREE.Vector3();
+  private shakeElapsed = SHAKE_DURATION;
 
   constructor(aspect: number) {
     this.camera = new THREE.PerspectiveCamera(50, aspect, 0.1, 200);
     this.camera.position.copy(offset);
     this.currentLookAt.set(0, 0, 0);
     this.camera.lookAt(this.currentLookAt);
+  }
+
+  /** Punches in a brief, decaying shake — reserved for real failures, never routine actions. */
+  triggerShake(): void {
+    this.shakeElapsed = 0;
   }
 
   snapTo(target: THREE.Vector3): void {
@@ -35,6 +41,15 @@ export class CameraRig {
     this.currentLookAt.y = damp(this.currentLookAt.y, this.desiredLookAt.y, CAMERA_DAMPING_LAMBDA, dt);
     this.currentLookAt.z = damp(this.currentLookAt.z, this.desiredLookAt.z, CAMERA_DAMPING_LAMBDA, dt);
     this.camera.lookAt(this.currentLookAt);
+
+    if (this.shakeElapsed < SHAKE_DURATION) {
+      this.shakeElapsed += dt;
+      const decay = Math.max(0, 1 - this.shakeElapsed / SHAKE_DURATION);
+      const magnitude = SHAKE_MAGNITUDE * decay;
+      this.camera.position.x += (Math.random() * 2 - 1) * magnitude;
+      this.camera.position.y += (Math.random() * 2 - 1) * magnitude * 0.6;
+      this.camera.position.z += (Math.random() * 2 - 1) * magnitude;
+    }
   }
 
   setAspect(aspect: number): void {

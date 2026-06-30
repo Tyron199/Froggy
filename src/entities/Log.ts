@@ -10,6 +10,7 @@ import {
   LOG_TIP_RECOVER_DURATION,
 } from '../game/constants.ts';
 import { lerp } from '../utils/math.ts';
+import { PopAnimator } from './PopAnimation.ts';
 
 // Log ids live in a separate range from Lilypad ids so the two never collide when both are
 // passed around as plain `{ id, position, radius }` landables.
@@ -26,12 +27,13 @@ export class Log {
 
   private readonly rollPivot: THREE.Group;
   private readonly bodyMaterial: THREE.MeshLambertMaterial;
+  private readonly pop: PopAnimator;
   private rollSpeed = LOG_ROLL_SPEED_IDLE;
   private occupiedElapsed = 0;
   private fired = false;
   private tipElapsed: number | null = null;
 
-  constructor(position: THREE.Vector3) {
+  constructor(position: THREE.Vector3, instant = true, staggerIndex = 0) {
     this.id = nextId++;
     this.position = position.clone();
     this.radius = LOG_RADIUS;
@@ -59,10 +61,23 @@ export class Log {
       cap.position.x = side * (LOG_LENGTH / 2);
       this.rollPivot.add(cap);
     }
+
+    this.pop = new PopAnimator(this.mesh, instant, staggerIndex);
+  }
+
+  get isReady(): boolean {
+    return this.pop.isReady;
+  }
+
+  /** Advances the spawn-in animation. Returns 'ripple' the instant the anticipation cue should fire. */
+  updatePop(dt: number): 'ripple' | null {
+    return this.pop.update(dt);
   }
 
   /** Advances the log's roll/danger state. Returns true the instant it tips while occupied. */
   update(dt: number, isOccupied: boolean): boolean {
+    if (!this.pop.isReady) return false;
+
     if (this.tipElapsed !== null) {
       this.tipElapsed += dt;
       const t = Math.min(1, this.tipElapsed / LOG_TIP_RECOVER_DURATION);

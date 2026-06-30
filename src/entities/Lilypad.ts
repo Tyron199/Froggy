@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { LILYPAD_HEIGHT, LILYPAD_RADIUS } from '../game/constants.ts';
+import { PopAnimator } from './PopAnimation.ts';
 
 let nextId = 0;
 
@@ -10,7 +11,9 @@ export class Lilypad {
   readonly radius: number;
   occupied = false;
 
-  constructor(position: THREE.Vector3, radius = LILYPAD_RADIUS) {
+  private readonly pop: PopAnimator;
+
+  constructor(position: THREE.Vector3, radius = LILYPAD_RADIUS, instant = true, staggerIndex = 0) {
     this.id = nextId++;
     this.position = position.clone();
     this.radius = radius;
@@ -41,5 +44,16 @@ export class Lilypad {
 
     this.mesh.position.copy(this.position);
     this.mesh.rotation.y = Math.random() * Math.PI * 2;
+
+    this.pop = new PopAnimator(this.mesh, instant, staggerIndex);
+  }
+
+  get isReady(): boolean {
+    return this.pop.isReady;
+  }
+
+  /** Advances the spawn-in animation. Returns 'ripple' the instant the anticipation cue should fire. */
+  updatePop(dt: number): 'ripple' | null {
+    return this.pop.update(dt);
   }
 }

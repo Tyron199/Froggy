@@ -36,16 +36,16 @@ export class LevelGenerator {
     this.logs.length = 0;
     this.frontierRadius = 0;
 
-    const start = this.addPad(new THREE.Vector3(0, 0, 0), LILYPAD_RADIUS);
-    this.generateNextRing();
-    this.generateNextRing();
+    const start = this.addPad(new THREE.Vector3(0, 0, 0), true, 0, LILYPAD_RADIUS);
+    this.generateNextRing(true);
+    this.generateNextRing(true);
     return start;
   }
 
   /** Expands the frontier as the frog approaches it, and recycles pads/logs left far behind. */
   update(frogPosition: THREE.Vector3, protectedIds: ReadonlySet<number>): void {
     if (frogPosition.length() > this.frontierRadius - FRONTIER_BUFFER) {
-      this.generateNextRing();
+      this.generateNextRing(false);
     }
     this.recycleFar(frogPosition, protectedIds);
   }
@@ -54,21 +54,21 @@ export class LevelGenerator {
     return [...this.pads, ...this.logs];
   }
 
-  private addPad(position: THREE.Vector3, radius = randomPadRadius()): Lilypad {
-    const pad = new Lilypad(position, radius);
+  private addPad(position: THREE.Vector3, instant: boolean, staggerIndex: number, radius = randomPadRadius()): Lilypad {
+    const pad = new Lilypad(position, radius, instant, staggerIndex);
     this.pads.push(pad);
     this.scene.add(pad.mesh);
     return pad;
   }
 
-  private addLog(position: THREE.Vector3): Log {
-    const log = new Log(position);
+  private addLog(position: THREE.Vector3, instant: boolean, staggerIndex: number): Log {
+    const log = new Log(position, instant, staggerIndex);
     this.logs.push(log);
     this.scene.add(log.mesh);
     return log;
   }
 
-  private generateNextRing(): void {
+  private generateNextRing(instant: boolean): void {
     const innerR = this.pads.length + this.logs.length <= 1 ? FIRST_RING_INNER_RADIUS : this.frontierRadius;
     const outerR = innerR + RING_WIDTH;
     const circumference = 2 * Math.PI * ((innerR + outerR) / 2);
@@ -77,8 +77,8 @@ export class LevelGenerator {
     for (let i = 0; i < count; i++) {
       const candidate = this.findPlacement(innerR, outerR);
       if (!candidate) continue;
-      if (Math.random() < LOG_SPAWN_CHANCE) this.addLog(candidate);
-      else this.addPad(candidate);
+      if (Math.random() < LOG_SPAWN_CHANCE) this.addLog(candidate, instant, i);
+      else this.addPad(candidate, instant, i);
     }
 
     this.frontierRadius = outerR;

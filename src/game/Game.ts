@@ -17,6 +17,9 @@ import { FlySpawner } from '../level/FlySpawner.ts';
 import { LevelGenerator } from '../level/LevelGenerator.ts';
 import { Fly } from '../entities/Fly.ts';
 import { RippleEffect } from '../entities/RippleEffect.ts';
+import { CatchBurst } from '../entities/CatchBurst.ts';
+import { ScorePopup } from '../ui/ScorePopup.ts';
+import { SfxEngine } from '../audio/SfxEngine.ts';
 import {
   DISTANCE_MILESTONE_BONUS,
   DISTANCE_MILESTONE_STEP,
@@ -24,6 +27,8 @@ import {
   RIPPLE_AMBIENT_INTERVAL_MIN,
   RIPPLE_AMBIENT_OPACITY,
   RIPPLE_AMBIENT_RADIUS,
+  RIPPLE_DURATION,
+  RIPPLE_START_OPACITY,
   TONGUE_RANGE,
 } from './constants.ts';
 
@@ -42,6 +47,8 @@ export class Game {
   private readonly trajectoryPreview = new TrajectoryPreview();
   private readonly water = new WaterPlane();
   private readonly ripples = new RippleEffect();
+  private readonly catchBurst = new CatchBurst();
+  private readonly sfx = new SfxEngine();
   private readonly sun = new THREE.DirectionalLight(0xfff4d6, 1.1);
   private nextAmbientRippleIn = randomAmbientInterval();
 
@@ -73,6 +80,7 @@ export class Game {
   private readonly hud: HUD;
   private readonly gameOverScreen: GameOverScreen;
   private readonly milestoneBanner: MilestoneBanner;
+  private readonly scorePopup: ScorePopup;
   private readonly levelGenerator: LevelGenerator;
   private readonly flySpawner: FlySpawner;
   private readonly raycaster = new THREE.Raycaster();
@@ -93,6 +101,7 @@ export class Game {
     this.setupLighting();
     this.setupWater();
     this.scene.add(this.ripples.group);
+    this.scene.add(this.catchBurst.group);
     this.levelGenerator = new LevelGenerator(this.scene);
     const startPad = this.levelGenerator.seed();
     this.lastSafeLilypad = startPad;
@@ -107,7 +116,12 @@ export class Game {
     this.hud = new HUD(uiRoot, this.store);
     this.gameOverScreen = new GameOverScreen(uiRoot, () => this.restart());
     this.milestoneBanner = new MilestoneBanner(uiRoot);
+    this.scorePopup = new ScorePopup(uiRoot);
     new SettingsPanel(uiRoot, this.settingsStore);
+
+    this.sfx.setMuted(!this.settingsStore.sound);
+    this.settingsStore.subscribe(() => this.sfx.setMuted(!this.settingsStore.sound));
+    window.addEventListener('pointerdown', () => this.sfx.unlock(), { once: true });
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -156,7 +170,16 @@ export class Game {
   }
 
   private allLandables(): Landable[] {
-    return [...this.lilypads, ...this.logs];
+    return [...this.lilypads.filter((p) => p.isReady), ...this.logs.filter((l) => l.isReady)];
+  }
+
+  private worldToScreen(point: THREE.Vector3): { x: number; y: number } {
+    const ndc = point.clone().project(this.cameraRig.camera);
+    const rect = this.canvas.getBoundingClientRect();
+    return {
+      x: rect.left + (ndc.x * 0.5 + 0.5) * rect.width,
+      y: rect.top + (1 - (ndc.y * 0.5 + 0.5)) * rect.height,
+    };
   }
 
   private updateAimPreview(aim: AimResult): void {
@@ -169,6 +192,7 @@ export class Game {
     this.pendingLandingTarget = findLandingTarget(aim.target, this.allLandables());
     this.currentLog = null;
     this.frog.startJump(aim.target, aim.power);
+    this.sfx.playJump(aim.power);
   }
 
   private handleTap(screenX: number, screenY: number): void {
@@ -195,9 +219,15 @@ export class Game {
     this.frog.lashTongue(fly.position.clone(), reaches, () => {
       if (!this.flySpawner.flies.includes(fly)) return;
       if (reaches) {
+        const catchPosition = fly.position.clone();
+        const awarded = this.store.registerCatch();
         this.flySpawner.remove(fly);
-        this.store.registerCatch();
         this.flySpawner.topUp();
+
+        this.catchBurst.spawn(catchPosition);
+        const screen = this.worldToScreen(catchPosition);
+        this.scorePopup.show(screen.x, screen.y, `+${awarded}`);
+        this.sfx.playCatch(awarded);
       } else {
         fly.flee(this.pickFleeTarget(fly));
       }
@@ -206,7 +236,7 @@ export class Game {
 
   private pickFleeTarget(fly: Fly): Lilypad {
     const candidates = this.lilypads
-      .filter((pad) => pad.id !== fly.homeLilypad.id)
+      .filter((pad) => pad.id !== fly.homeLilypad.id && pad.isReady)
       .sort((a, b) => a.position.distanceTo(fly.homeLilypad.position) - b.position.distanceTo(fly.homeLilypad.position));
     if (candidates.length === 0) return fly.homeLilypad;
     const pool = candidates.slice(0, FLEE_CANDIDATE_POOL);
@@ -225,6 +255,7 @@ export class Game {
     this.frog.landOnSurface(target);
     this.levelGenerator.update(target.position, new Set([target.id]));
     this.flySpawner.removeOrphans();
+    this.sfx.playLand();
 
     if (target instanceof Lilypad) {
       this.lastSafeLilypad = target;
@@ -237,8 +268,10 @@ export class Game {
   /** Shared failure path for both missing a jump into the water and a log tipping underfoot. */
   private frogFalls(): void {
     this.ripples.spawn(this.frog.group.position);
+    this.cameraRig.triggerShake();
     this.frog.sink();
     this.store.loseLife();
+    this.sfx.playSplash();
 
     if (this.store.status === GameStatus.GameOver) {
       window.setTimeout(() => this.gameOverScreen.show(this.store), RESPAWN_DELAY_MS);
@@ -287,6 +320,15 @@ export class Game {
     }
   }
 
+  private updatePopAnimations(dt: number): void {
+    for (const pad of this.lilypads) {
+      if (pad.updatePop(dt) === 'ripple') this.ripples.spawn(pad.position, RIPPLE_START_OPACITY, RIPPLE_DURATION * 0.7);
+    }
+    for (const log of this.logs) {
+      if (log.updatePop(dt) === 'ripple') this.ripples.spawn(log.position, RIPPLE_START_OPACITY, RIPPLE_DURATION * 0.7);
+    }
+  }
+
   private tick(): void {
     const dt = Math.min(this.clock.getDelta(), 0.1);
 
@@ -294,10 +336,12 @@ export class Game {
     if (jumpJustCompleted) this.resolveJumpLanding();
 
     this.updateLogs(dt);
+    this.updatePopAnimations(dt);
     this.flySpawner.update(this.clock.elapsedTime, dt);
     this.cameraRig.update(this.frog.group.position, dt);
     this.updateAmbientRipples(dt);
     this.ripples.update(dt);
+    this.catchBurst.update(dt);
 
     this.store.tickCombo(dt);
     this.hud.setComboTimeRemaining(this.store.comboTimeRemaining);
@@ -321,6 +365,7 @@ export class Game {
       this.store.addScore(DISTANCE_MILESTONE_BONUS);
       this.store.updateDistance(distance);
       this.milestoneBanner.show(`${Math.round(distance)}m!`);
+      this.sfx.playMilestone();
     }
   }
 

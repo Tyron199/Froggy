@@ -35,12 +35,13 @@ export class GameStore {
     this.notify();
   }
 
-  /** Registers a fly catch: escalates the combo multiplier and awards that many points. */
-  registerCatch(): void {
+  /** Registers a fly catch: escalates the combo multiplier and awards that many points. Returns the points awarded. */
+  registerCatch(): number {
     this.combo = Math.min(COMBO_MAX_MULTIPLIER, this.combo + 1);
     this.comboTimeRemaining = COMBO_WINDOW_SECONDS;
     this.score += this.combo;
     this.notify();
+    return this.combo;
   }
 
   /** Counts the combo window down; resets the streak once it runs out. */
