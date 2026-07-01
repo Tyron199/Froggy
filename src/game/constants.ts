@@ -131,16 +131,18 @@ export const CATCH_BURST_COUNT = 10;
 export const CATCH_BURST_DURATION = 0.5;
 export const CATCH_BURST_SPEED = 2.2;
 
-// Water surface animation (CPU vertex displacement, normals recomputed per frame).
+// Water surface shimmer. Purely a fragment-shader effect (perturbed normal + color tint) — the
+// plane geometry itself never moves, so it can never clip into lilypads/logs sitting on top of it.
 export const WATER_SIZE = 150;
-export const WATER_SEGMENTS = 50;
-export const WATER_WAVE_AMPLITUDE = 0.09;
-export const WATER_WAVE_FREQUENCY = 0.35;
-export const WATER_WAVE_SPEED = 0.6;
-export const WATER_WAVE_SECONDARY_AMPLITUDE = 0.045;
-export const WATER_WAVE_SECONDARY_FREQUENCY = 0.9;
-export const WATER_WAVE_SECONDARY_SPEED = 1.3;
-/** Vertex colors lerp toward these at wave crests/troughs so motion reads clearly at any light angle. */
+export const WATER_SHIMMER_AMPLITUDE = 0.5;
+export const WATER_SHIMMER_FREQUENCY = 0.35;
+export const WATER_SHIMMER_SPEED = 0.5;
+export const WATER_SHIMMER_SECONDARY_AMPLITUDE = 0.25;
+export const WATER_SHIMMER_SECONDARY_FREQUENCY = 0.9;
+export const WATER_SHIMMER_SECONDARY_SPEED = 1.1;
+/** How strongly the shimmer field tilts the surface normal (specular sparkle), purely cosmetic. */
+export const WATER_NORMAL_STRENGTH = 0.5;
+/** Color tint lerped in at shimmer crests/troughs so the motion reads at any light angle. */
 export const WATER_COLOR_BASE = 0x1e6f8c;
 export const WATER_COLOR_CREST = 0x8fdcf0;
 export const WATER_COLOR_TROUGH = 0x123247;

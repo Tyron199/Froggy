@@ -38,10 +38,12 @@ export class PullReleaseController {
   }
 
   private onPointerDown(event: PointerEvent): void {
+    // Always suppress the browser's default touch behavior on the canvas (text selection,
+    // callout menu) even when the game itself ignores this input (e.g. mid-jump).
+    event.preventDefault();
     if (this.activePointerId !== null) return;
     if (!this.callbacks.canAim()) return;
 
-    event.preventDefault();
     this.activePointerId = event.pointerId;
     this.canvas.setPointerCapture(event.pointerId);
     this.dragStartX = event.clientX;

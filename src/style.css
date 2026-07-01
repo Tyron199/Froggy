@@ -16,6 +16,11 @@ body {
   background: #0a2a3a;
   font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* A held finger must never trigger the browser's text-selection/callout UI over the game. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #app {
