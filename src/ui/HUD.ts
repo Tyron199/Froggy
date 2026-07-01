@@ -2,6 +2,7 @@ import { COMBO_WINDOW_SECONDS } from '../game/constants.ts';
 import { GameStore } from '../game/GameState.ts';
 
 export class HUD {
+  private readonly hudEl: HTMLDivElement;
   private readonly scoreEl: HTMLDivElement;
   private readonly distanceEl: HTMLDivElement;
   private readonly comboEl: HTMLDivElement;
@@ -10,7 +11,8 @@ export class HUD {
   private readonly livesEl: HTMLDivElement;
 
   constructor(root: HTMLElement, store: GameStore) {
-    const hud = document.createElement('div');
+    this.hudEl = document.createElement('div');
+    const hud = this.hudEl;
     hud.className = 'hud';
 
     const leftColumn = document.createElement('div');
@@ -48,6 +50,10 @@ export class HUD {
     store.subscribe(() => this.render(store));
     this.render(store);
     this.setDistance(0);
+  }
+
+  setVisible(visible: boolean): void {
+    this.hudEl.classList.toggle('hidden', !visible);
   }
 
   /** Called every frame with the live combo countdown (bypasses the store's notify, which only fires on discrete combo changes). */

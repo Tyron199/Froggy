@@ -11,19 +11,25 @@ import { PullReleaseController, type AimResult } from '../input/PullReleaseContr
 import { TrajectoryPreview } from '../input/TrajectoryPreview.ts';
 import { HUD } from '../ui/HUD.ts';
 import { GameOverScreen } from '../ui/GameOverScreen.ts';
+import { MainMenu } from '../ui/MainMenu.ts';
 import { SettingsPanel } from '../ui/SettingsPanel.ts';
 import { MilestoneBanner } from '../ui/MilestoneBanner.ts';
 import { FlySpawner } from '../level/FlySpawner.ts';
 import { LevelGenerator } from '../level/LevelGenerator.ts';
-import { Fly } from '../entities/Fly.ts';
+import { Fly, FlyState } from '../entities/Fly.ts';
 import { RippleEffect } from '../entities/RippleEffect.ts';
 import { CatchBurst } from '../entities/CatchBurst.ts';
 import { FishSchool } from '../entities/FishSchool.ts';
 import { ScorePopup } from '../ui/ScorePopup.ts';
 import { SfxEngine } from '../audio/SfxEngine.ts';
+import { clamp } from '../utils/math.ts';
 import {
+  ATTRACT_ACTION_COOLDOWN_MAX,
+  ATTRACT_ACTION_COOLDOWN_MIN,
   DISTANCE_MILESTONE_BONUS,
   DISTANCE_MILESTONE_STEP,
+  MAX_JUMP_DIST,
+  MIN_JUMP_DIST,
   RIPPLE_AMBIENT_INTERVAL_MAX,
   RIPPLE_AMBIENT_INTERVAL_MIN,
   RIPPLE_AMBIENT_OPACITY,
@@ -80,6 +86,7 @@ export class Game {
   private readonly canvas: HTMLCanvasElement;
   private readonly hud: HUD;
   private readonly gameOverScreen: GameOverScreen;
+  private readonly mainMenu: MainMenu;
   private readonly milestoneBanner: MilestoneBanner;
   private readonly scorePopup: ScorePopup;
   private readonly levelGenerator: LevelGenerator;
@@ -90,6 +97,7 @@ export class Game {
   private lastSafeLilypad: Lilypad;
   private currentLog: Log | null = null;
   private nextMilestone = DISTANCE_MILESTONE_STEP;
+  private attractCooldown = ATTRACT_ACTION_COOLDOWN_MIN;
 
   constructor(canvas: HTMLCanvasElement, uiRoot: HTMLElement) {
     this.canvas = canvas;
@@ -119,7 +127,9 @@ export class Game {
     this.flySpawner.spawnInitial();
 
     this.hud = new HUD(uiRoot, this.store);
+    this.hud.setVisible(false);
     this.gameOverScreen = new GameOverScreen(uiRoot, () => this.restart());
+    this.mainMenu = new MainMenu(uiRoot, () => this.beginPlaying());
     this.milestoneBanner = new MilestoneBanner(uiRoot);
     this.scorePopup = new ScorePopup(uiRoot);
     new SettingsPanel(uiRoot, this.settingsStore);
@@ -218,6 +228,11 @@ export class Game {
     const fly = intersections[0].object.userData.fly as Fly;
     if (performance.now() < fly.noRetapUntil) return;
 
+    this.tryCatchFly(fly);
+  }
+
+  /** Lashes the tongue at `fly`, catching it if in range or letting it flee otherwise. Shared by real taps and the attract-mode AI. */
+  private tryCatchFly(fly: Fly): void {
     const distance = this.frog.group.position.distanceTo(fly.position);
     const reaches = distance <= TONGUE_RANGE;
 
@@ -273,8 +288,16 @@ export class Game {
   /** Shared failure path for both missing a jump into the water and a log tipping underfoot. */
   private frogFalls(): void {
     this.ripples.spawn(this.frog.group.position);
-    this.cameraRig.triggerShake();
     this.frog.sink();
+
+    // The attract-mode background frog never costs a life or shows the game-over screen — it's
+    // just cosmetic. This should be rare anyway since the AI only ever targets in-range lilypads.
+    if (this.store.status === GameStatus.Menu) {
+      window.setTimeout(() => this.frog.respawnOnLilypad(this.lastSafeLilypad), RESPAWN_DELAY_MS);
+      return;
+    }
+
+    this.cameraRig.triggerShake();
     this.store.loseLife();
     this.sfx.playSplash();
 
@@ -286,6 +309,13 @@ export class Game {
     window.setTimeout(() => {
       this.frog.respawnOnLilypad(this.lastSafeLilypad);
     }, RESPAWN_DELAY_MS);
+  }
+
+  /** Leaves the main menu (and its attract-mode AI) and begins a real, freshly-seeded run. */
+  private beginPlaying(): void {
+    this.mainMenu.hide();
+    this.hud.setVisible(true);
+    this.restart();
   }
 
   private restart(): void {
@@ -340,6 +370,7 @@ export class Game {
     const jumpJustCompleted = this.frog.update(dt);
     if (jumpJustCompleted) this.resolveJumpLanding();
 
+    this.updateAttractMode(dt);
     this.updateLogs(dt);
     this.updatePopAnimations(dt);
     this.flySpawner.update(this.clock.elapsedTime, dt);
@@ -363,10 +394,44 @@ export class Game {
     this.renderer.render(this.scene, this.cameraRig.camera);
   }
 
+  /** Drives the frog around the pond by itself while the main menu is up, as a living background. */
+  private updateAttractMode(dt: number): void {
+    if (this.store.status !== GameStatus.Menu) return;
+    if (this.frog.state !== FrogState.Idle) return;
+
+    this.attractCooldown -= dt;
+    if (this.attractCooldown > 0) return;
+    this.attractCooldown = ATTRACT_ACTION_COOLDOWN_MIN + Math.random() * (ATTRACT_ACTION_COOLDOWN_MAX - ATTRACT_ACTION_COOLDOWN_MIN);
+
+    const frogPos = this.frog.group.position;
+    const nearbyFly = this.flySpawner.flies.find(
+      (fly) =>
+        fly.state === FlyState.Idle && performance.now() >= fly.noRetapUntil && frogPos.distanceTo(fly.position) <= TONGUE_RANGE,
+    );
+    if (nearbyFly) {
+      this.tryCatchFly(nearbyFly);
+      return;
+    }
+
+    // Only ever target lilypads (never logs), so the background frog can't trigger a tip-and-fall.
+    const candidates = this.lilypads.filter((pad) => {
+      if (!pad.isReady) return false;
+      const distance = frogPos.distanceTo(pad.position);
+      return distance >= MIN_JUMP_DIST && distance <= MAX_JUMP_DIST;
+    });
+    if (candidates.length === 0) return;
+
+    const target = candidates[Math.floor(Math.random() * candidates.length)];
+    const distance = frogPos.distanceTo(target.position);
+    const power = clamp((distance - MIN_JUMP_DIST) / (MAX_JUMP_DIST - MIN_JUMP_DIST), 0, 1);
+    this.releaseJump({ target: target.position.clone(), power });
+  }
+
   private updateDistance(frogPos: THREE.Vector3): void {
     const distance = Math.hypot(frogPos.x, frogPos.z);
     this.hud.setDistance(distance);
 
+    if (this.store.status !== GameStatus.Playing) return;
     if (distance >= this.nextMilestone) {
       this.nextMilestone += DISTANCE_MILESTONE_STEP;
       this.store.addScore(DISTANCE_MILESTONE_BONUS);

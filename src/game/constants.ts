@@ -160,3 +160,8 @@ export const FISH_WANDER_SPEED = 0.18;
 export const FISH_HOME_RANGE = 8;
 /** Once a fish drifts this far from the frog, its home point is relocated nearby. */
 export const FISH_RECENTER_DISTANCE = 11;
+
+// Attract-mode AI: drives the frog around the pond as a live 3D background behind the main menu.
+/** Random pause range (seconds) between attract-mode actions, so the AI doesn't feel frantic. */
+export const ATTRACT_ACTION_COOLDOWN_MIN = 0.35;
+export const ATTRACT_ACTION_COOLDOWN_MAX = 0.9;

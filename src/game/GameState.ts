@@ -12,7 +12,7 @@ type Listener = () => void;
 export class GameStore {
   score = 0;
   lives = STARTING_LIVES;
-  status: GameStatus = GameStatus.Playing;
+  status: GameStatus = GameStatus.Menu;
   highScore = Number(localStorage.getItem('froggy-leap-high-score') ?? 0);
 
   combo = 0;
